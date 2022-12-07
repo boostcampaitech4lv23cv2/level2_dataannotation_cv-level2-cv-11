@@ -17,15 +17,13 @@ def fix_seed(random_seed):
     np.random.default_rng(random_seed)
     np.random.seed(random_seed)
     random.seed(random_seed)
-    os.environ['PYTHONHASHSEED'] = str(random_seed) 
+    os.environ['PYTHONHASHSEED'] = str(random_seed)
     
     
 # DataLoader는 다중 프로세스 데이터 로드 알고리즘에서 임의성에 따라 작업자를 다시 시드합니다. 
 # 재현성을 유지하기 위한 사용 worker_init_fn()및 생성기
 def seed_worker(random_seed):
-    np.random.seed(random_seed)
-    random.seed(random_seed)
 
     g = torch.Generator()
-    g.manual_seed(0)
+    g.manual_seed(random_seed)
     return g
