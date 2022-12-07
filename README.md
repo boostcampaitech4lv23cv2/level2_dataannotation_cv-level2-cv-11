@@ -1,19 +1,27 @@
 # level2_objectdetection_cv-level2-cv-11
-![image](https://user-images.githubusercontent.com/30896956/205215342-d1431a61-4228-492c-a9d8-0196bdf76556.png)
+![image](https://user-images.githubusercontent.com/62556539/206107392-78a7a265-35d3-491a-99f9-01accbaf78d1.png)
 
 
 ## 프로젝트 개요
 
- 사진에서 쓰레기를 Detection 하는 모델을 만들어 잘못 분리배출되는 문제점을 해결해보고자 합니다. 문제 해결을 위한 데이터셋으로는 일반 쓰레기, 플라스틱, 종이, 유리 등 10 종류의 쓰레기가 찍힌 사진 데이터셋이 제공됩니다.
+ 스마트폰으로 카드를 결제하거나, 카메라로 카드를 인식할 경우 자동으로 카드 번호가 입력되는 경우가 있습니다. 또 주차장에 들어가면 차량 번호가 자동으로 인식되는 경우도 흔히 있습니다. 이처럼 OCR (Optimal Character Recognition) 기술은 사람이 직접 쓰거나 이미지 속에 있는 문자를 얻은 다음 이를 컴퓨터가 인식할 수 있도록 하는 기술로, 컴퓨터 비전 분야에서 현재 널리 쓰이는 대표적인 기술 중 하나입니다.
 
- - Input : 쓰레기 객체가 담긴 이미지와 COCO format의 bbox annotation
- - 전체 데이터셋 중 약 50%(4883장)는 학습 데이터셋으로 활용됩니다.
- - Output : 모델은 bbox 좌표, 카테고리, score 값을 리턴합니다. 이를 submission 양식에 맞게 csv 파일을 만들어 제출합니다. (submission format에 대한 설명은 평가방법을 참고해주세요.)
+ OCR task는 글자 검출 (text detection), 글자 인식 (text recognition), 정렬기 (Serializer) 등의 모듈로 이루어져 있습니다. 본 대회는 아래와 같은 특징과 제약 사항이 있습니다.
+본 대회에서는 '글자 검출' task 만을 해결하게 됩니다.
+예측 csv 파일 제출 (Evaluation) 방식이 아닌 model checkpoint 와 inference.py 를 제출하여 채점하는 방식입니다. (Inference) 상세 제출 방법은 AI Stages 가이드 문서를 참고해 주세요! 대회 기간과 task 난이도를 고려하여 코드 작성에 제약사항이 있습니다.
 
-Evaluation
+Input : 글자가 포함된 전체 이미지
+Output : bbox 좌표가 포함된 UFO Format (상세 제출 포맷은 평가 방법 탭 및 강의 5강 참조)
 
-- mAP50(Mean Average Precision)로 평가됩니다.
-![image](https://user-images.githubusercontent.com/62556539/205196213-21d58e35-e92f-463a-9d32-41954ad0dbef.png)
+제출포맷: UFO
+
+평가방법: DetEval
+1) 모든 정답/예측박스들에 대해서 Area Recall, Area Precision을 미리 계산
+![image](https://user-images.githubusercontent.com/62556539/206107994-99496577-c39e-4e51-9a8f-6d8fa3449685.png)
+2) 모든 정답 박스와 예측 박스를 순회하면서, 매칭이 되었는지 판단하여 박스 레벨로 정답 여부를 측정
+ - 매칭 조건(one-to-one match, one-to-many match, many-to-one match)
+![image](https://user-images.githubusercontent.com/62556539/206108078-fee44b19-2a09-4450-b4a3-6b4dde74ec2f.png)
+3) 모든 이미지에 대하여 Recall, Precision을 구한 이후, 최종 F1-Score은 모든 이미지 레벨에서 측정 값의 평균으로 측정
 
 ## 프로젝트 팀 구성
 
@@ -35,16 +43,6 @@ Evaluation
 ## 디렉토리 구조
 
 ```CMD
-level2_objectdetection_cv-level2-cv-11
-└── baseline
-    └── UniverseNet   # MMDetection 기반 패키지
-    └── detectron2
-    └── detrex        # Detectron2 기반 패키지
-    └── faster_rcnn   
-    └── mmdetection
-    └── yolov7        # 자체 라이브러리
-└── notebooks         # EDA, ensemble, pseudo labeling 등
-
 
 ```
 
@@ -58,44 +56,21 @@ level2_objectdetection_cv-level2-cv-11
 
 ## 프로젝트 수행 절차 및 방법
 
-[![image](https://user-images.githubusercontent.com/62556539/200262300-3765b3e4-0050-4760-b008-f218d079a770.png)](https://excessive-help-ce8.notion.site/b41d8c9e26b64e8f9e18b529ebc1f287)
+[![image]()
 
 
 
 ## 프로젝트 수행 결과
 
-![image](https://user-images.githubusercontent.com/62556539/205196491-ecdcabd1-e4eb-4ff8-8607-61205d9b4ac6.png)
-
-![image (6)](https://user-images.githubusercontent.com/48004826/205533073-b9e1c4ec-2fb0-4653-8097-f8a923e53719.png)
-
-
-최종 모델: 1stage, 2 stage 각각 앙상블 후 다시 앙상블
-
 
 ## 자체 평가 의견
 
 **잘한 점**
-- Github Convention을 정하여 협업 결과 공유 및 정리에 큰 도움이 되었다.  
-- Github 이슈, PR 등의 기능을 적극적으로 사용해보았다.  
-- 힘든 일정에도 서로를 격려하고 팀 분위기를 긍정적으로 유지하였다.  
-- 다양한 SOTA object detector 에 대해 공부하고 실험했다.  
-- 함께 디버깅하여 빠른 문제 대응을 할 수 있었다.  
-- PR-Curve 등 Wandb 기능을 커스텀하여 다양한 메트릭을 볼 수 있었다.  
-- Wandb를 사용하여 실시간 모니터링 및 팀원들과의 결과 공유가 용이했다.  
+- 
 
 **아쉬운 점:**
-- 추가한 코드에 대해 코드 내에서 설명이 부족했다.
-- 모델 및 기법들에 대해 이론적인 공부와 결과분석이 부족했다.
-- 대회 종료까지 Bounding Box의 크기, 비율을 고려하지 않은 데이터셋 분할을 사용해서 모델 학습과 검증이 잘 안되었다.
-- augmentation 에 대한 실험이 부족했다.
-- Kaggle competition 의 토론글들을 모델 외의 method 선정에 활용하지 못했다.
-- 팀원간의 방향성 공유가 부족했다.
-- data 근거에 기반해서 실험계획이 수립되지 않았다.
+- 
 
 **개선할 점:**
-- 주어진 시간 내에 다양한 변수를 모두 고려하여 균형 잡힌 실험 계획을 할 것이다.
-- Kaggle competition의 인기 토론글들을 좀 더 적극 활용 해볼 것이다.
-- 팀 적 활동을 더 많이 하도록 노력해야겠다.
-- 팀 내의 문제점과 목표를 서로 공유하고 다같이 다듬어 나갈 수 있는 방안을 강구해야겠다
-- 쉬운 것부터 단계적으로 실험해나갔으면 좋겠다.
+- 
 ---
