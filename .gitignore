@@ -1,0 +1,14 @@
+## except filename extenstion
+
+
+## except file
+
+
+## except directory
+.vscode/
+__pycache__/
+.ipynb_checkpoint/
+.ipynb_checkpoints/
+wandb/
+work_dirs/
+*.csv
