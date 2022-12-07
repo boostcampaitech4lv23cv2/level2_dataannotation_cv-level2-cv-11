@@ -15,13 +15,15 @@ from east_dataset import EASTDataset
 from dataset import SceneTextDataset
 from model import EAST
 
+from reproducibility import fix_seed, seed_worker
+
 
 def parse_args():
     parser = ArgumentParser()
 
     # Conventional args
     parser.add_argument('--data_dir', type=str,
-                        default=os.environ.get('SM_CHANNEL_TRAIN', '../input/data/ICDAR17_Korean'))
+                        default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/ICDAR17_Korean'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR',
                                                                         'trained_models'))
 
@@ -48,7 +50,8 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     dataset = SceneTextDataset(data_dir, split='train', image_size=image_size, crop_size=input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / batch_size)
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    # generator 재현성
+    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, generator = seed_worker(42))
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
@@ -92,6 +95,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 
 
 def main(args):
+    fix_seed(42)
     do_training(**args.__dict__)
 
 
