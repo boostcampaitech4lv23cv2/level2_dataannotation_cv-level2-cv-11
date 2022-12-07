@@ -17,6 +17,8 @@ from model import EAST
 
 from reproducibility import fix_seed, seed_worker
 
+import wandb
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -36,6 +38,10 @@ def parse_args():
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_epoch', type=int, default=200)
     parser.add_argument('--save_interval', type=int, default=5)
+    
+    # wandb args
+    parser.add_argument('--name', type=str, help="wandb 실험 이름")
+    parser.add_argument('--tags', default= None, nargs='+', type=str, help = "wandb 실험 태그")
 
     args = parser.parse_args()
 
@@ -46,7 +52,7 @@ def parse_args():
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval):
+                learning_rate, max_epoch, save_interval, name, tags):
     dataset = SceneTextDataset(data_dir, split='train', image_size=image_size, crop_size=input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / batch_size)
@@ -56,9 +62,10 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
     model.to(device)
+    
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch // 2], gamma=0.1)
-
+    
     model.train()
     for epoch in range(max_epoch):
         epoch_loss, epoch_start = 0, time.time()
@@ -80,11 +87,32 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                     'IoU loss': extra_info['iou_loss']
                 }
                 pbar.set_postfix(val_dict)
-
+                
+                # wandb: loss for step
+                wandb.log(val_dict)
+                
+                # wandb: image gt and pred for step
+                img_log = wandb.Image(img)
+                gt_score_map_log = wandb.Image(gt_score_map)
+                pred_score_map_log = wandb.Image(extra_info['score_map'])
+                #gt_geo_map_log = wandb.Image(gt_geo_map) 
+                # "gt_geo_map":gt_geo_map_log
+                
+                wandb.log({
+                    "img":img_log,
+                    "gt_score_map": gt_score_map_log,
+                    "pred_score_map_log": pred_score_map_log
+                    })
+                
+                
         scheduler.step()
 
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
+        
+        # wandb: loss for epoch
+        wandb.log({"Mean loss": epoch_loss / num_batches})
+        wandb.log({"Epoch":epoch})
 
         if (epoch + 1) % save_interval == 0:
             if not osp.exists(model_dir):
@@ -95,6 +123,8 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 
 
 def main(args):
+    wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags)
+    wandb.config.update(args)
     fix_seed(42)
     do_training(**args.__dict__)
 
