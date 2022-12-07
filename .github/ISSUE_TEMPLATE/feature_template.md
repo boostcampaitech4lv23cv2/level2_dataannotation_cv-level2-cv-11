@@ -7,14 +7,18 @@ assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+# Overview
+ - 기능 구현 배경 및 필요성 기술
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+# Todo
+### 기능 1
+> - [ ] 세부기능 1
+> - [ ] 세부기능 2
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+### 기능 2
+> - [ ] 세부기능 1
+> - [ ] 세부기능 2
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+# Additional Context
+- Todo 목록을 완수하지 못할 경우 수행해야하는 대안 task 서술
+- 추가적으로 필요한 부분 서술
