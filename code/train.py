@@ -39,6 +39,9 @@ def parse_args():
     parser.add_argument('--max_epoch', type=int, default=200)
     parser.add_argument('--save_interval', type=int, default=5)
     
+    # seed
+    parser.add_argument('--seed', type=int, default= 42, help="set random seed")
+    
     # wandb args
     parser.add_argument('--name', type=str, help="wandb 실험 이름")
     parser.add_argument('--tags', default= None, nargs='+', type=str, help = "wandb 실험 태그")
@@ -52,12 +55,14 @@ def parse_args():
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval, name, tags):
-    dataset = SceneTextDataset(data_dir, split='train', image_size=image_size, crop_size=input_size)
-    dataset = EASTDataset(dataset)
-    num_batches = math.ceil(len(dataset) / batch_size)
+                learning_rate, max_epoch, save_interval, name, tags, seed):
+    
+    train_dataset = SceneTextDataset(data_dir, split='random_split_ufo/train', image_size=image_size, crop_size=input_size)
+    train_dataset = EASTDataset(train_dataset)
+    num_batches = math.ceil(len(train_dataset) / batch_size)
     # generator 재현성
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, generator = seed_worker(42))
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, generator= seed_worker(seed))
+    
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
@@ -78,41 +83,70 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 loss.backward()
                 optimizer.step()
 
-                loss_val = loss.item()
-                epoch_loss += loss_val
+                loss_train = loss.item()
+                epoch_loss += loss_train
 
                 pbar.update(1)
-                val_dict = {
-                    'Cls loss': extra_info['cls_loss'], 'Angle loss': extra_info['angle_loss'],
-                    'IoU loss': extra_info['iou_loss']
+                train_dict = {
+                    'Train/Cls loss': extra_info['cls_loss'],
+                    'Train/Angle loss': extra_info['angle_loss'],
+                    'Train/IoU loss': extra_info['iou_loss']
                 }
-                pbar.set_postfix(val_dict)
+                pbar.set_postfix(train_dict)
                 
                 # wandb: loss for step
-                wandb.log(val_dict)
-                
-                # wandb: image gt and pred for step
-                img_log = wandb.Image(img)
-                gt_score_map_log = wandb.Image(gt_score_map)
-                pred_score_map_log = wandb.Image(extra_info['score_map'])
-                #gt_geo_map_log = wandb.Image(gt_geo_map) 
-                # "gt_geo_map":gt_geo_map_log
-                
-                wandb.log({
-                    "img":img_log,
-                    "gt_score_map": gt_score_map_log,
-                    "pred_score_map_log": pred_score_map_log
-                    })
-                
-                
+                wandb.log(train_dict)
+                     
         scheduler.step()
 
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
         
         # wandb: loss for epoch
-        wandb.log({"Mean loss": epoch_loss / num_batches})
-        wandb.log({"Epoch":epoch})
+        wandb.log({"Train/Mean loss": epoch_loss / num_batches})
+        wandb.log({"Train/Epoch":epoch})
+        
+        # 모델 평가
+        print('\nModel Eval/Epoch {}:'.format(epoch + 1))
+        model.eval()
+        val_loss = {'cls_loss' : 0, 'angle_loss': 0, 'iou_loss': 0}
+        val_dataset = SceneTextDataset(data_dir, split='random_split_ufo/val', image_size=image_size, crop_size=input_size)
+        val_dataset = EASTDataset(val_dataset)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
+        val_num_batches = math.ceil(len(val_dataset) / batch_size)
+        for img, gt_score_map, gt_geo_map, roi_mask in val_loader:
+            pbar.set_description('[Epoch {}]'.format(epoch + 1))
+
+            loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
+            
+            for key in val_loss.keys():
+                val_loss[key] += extra_info[key]
+            
+            
+            # wandb: image gt and pred for val every epoch
+            img_log = wandb.Image(img)
+            gt_score_map_log = wandb.Image(gt_score_map)
+            pred_score_map_log = wandb.Image(extra_info['score_map'])
+            
+            wandb.log({
+                "Visual/img":img_log,
+                "Visual/gt_score_map": gt_score_map_log,
+                "Visual/pred_score_map_log": pred_score_map_log
+                })
+    
+        val_dict = {
+                'Val/Cls loss': val_loss['cls_loss']/val_num_batches,
+                'Val/Angle loss':val_loss['angle_loss']/val_num_batches,
+                'Val/IoU loss': val_loss['iou_loss']/val_num_batches
+            }
+        val_dict['Val/Mean loss'] =  val_dict['Val/Cls loss'] + val_dict['Val/Angle loss'] + val_dict['Val/IoU loss']
+        
+        print('Val/Mean loss: {:.4f}, Val/Cls loss: {:.4f}, Val/Angle loss: {:.4f}, Val/IoU loss: {:.4f}\n'.format(
+            val_dict['Val/Mean loss'], val_dict['Val/Cls loss'], val_dict['Val/Angle loss'], val_dict['Val/IoU loss']))
+         
+        # wandb: loss for val every epoch
+        wandb.log(val_dict)
+        
 
         if (epoch + 1) % save_interval == 0:
             if not osp.exists(model_dir):
@@ -123,9 +157,11 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 
 
 def main(args):
+    assert args.name != None, "Error: 실험 이름을 적어주세요"
+    assert args.tags != None, "Error: 실험 태그를 적어주세요"
     wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags)
     wandb.config.update(args)
-    fix_seed(42)
+    fix_seed(args.seed)
     do_training(**args.__dict__)
 
 
