@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--name', type=str, help="wandb 실험 이름")
     parser.add_argument('--tags', default= None, nargs='+', type=str, help = "wandb 실험 태그")
     parser.add_argument('--notes', default= None, type=str, help='wandb 실험 노트(설명)')
-    parser.add_argument('--viz_log', default= [], nargs='+', type=int, help='wandb viz log epoch list')
+    parser.add_argument('--viz_log', default= [50,100,150,200], nargs='+', type=int, help='wandb viz log epoch list')
 
     args = parser.parse_args()
 
