@@ -177,6 +177,7 @@ def main(args):
     assert args.tags != None, "Error: 실험 태그를 적어주세요"
     wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes)
     wandb.config.update(args)
+    wandb.config.update({'data':osp.basename(args.data_dir)})
     fix_seed(args.seed)
     do_training(**args.__dict__)
 
