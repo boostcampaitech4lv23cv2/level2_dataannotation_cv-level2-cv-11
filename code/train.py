@@ -19,6 +19,21 @@ from reproducibility import fix_seed, seed_worker
 
 import wandb
 
+# wandb 관련 함수
+
+def log_image(img):
+    img_log =wandb.Image(img)
+    wandb.log({"Visual/img":img_log})
+    
+def log_score_map(gt_score_map, score_map):
+    gt_score_map_log = wandb.Image(gt_score_map)
+    pred_score_map_log = wandb.Image(score_map)
+    
+    wandb.log({
+        "Visual/gt_score_map": gt_score_map_log,
+        "Visual/pred_score_map_log": pred_score_map_log
+        })
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -46,6 +61,7 @@ def parse_args():
     parser.add_argument('--name', type=str, help="wandb 실험 이름")
     parser.add_argument('--tags', default= None, nargs='+', type=str, help = "wandb 실험 태그")
     parser.add_argument('--notes', default= None, type=str, help='wandb 실험 노트(설명)')
+    parser.add_argument('--viz_log', default= [], nargs='+', type=int, help='wandb viz log epoch list')
 
     args = parser.parse_args()
 
@@ -56,7 +72,7 @@ def parse_args():
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval, name, tags, seed, notes):
+                learning_rate, max_epoch, save_interval, name, tags, seed, notes, viz_log):
     
     train_dataset = SceneTextDataset(data_dir, split='random_split_ufo/train', image_size=image_size, crop_size=input_size)
     train_dataset = EASTDataset(train_dataset)
@@ -137,17 +153,10 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 for key in val_loss.keys():
                     val_loss[key] += extra_info[key]
                 
-                
-                # wandb: image gt and pred for val every epoch
-                img_log = wandb.Image(img)
-                gt_score_map_log = wandb.Image(gt_score_map)
-                pred_score_map_log = wandb.Image(extra_info['score_map'])
-                
-                wandb.log({
-                    "Visual/img":img_log,
-                    "Visual/gt_score_map": gt_score_map_log,
-                    "Visual/pred_score_map_log": pred_score_map_log
-                    })
+                # wandb log visualization
+                if epoch +1 == args.max_epoch or epoch + 1 in args.viz_log:
+                    log_image(img)
+                    log_score_map(gt_score_map, extra_info['score_map'])
     
         val_dict = {
                 'Val/Cls loss': val_loss['cls_loss']/val_num_batches,
