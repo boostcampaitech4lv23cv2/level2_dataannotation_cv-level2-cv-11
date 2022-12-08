@@ -45,6 +45,7 @@ def parse_args():
     # wandb args
     parser.add_argument('--name', type=str, help="wandb 실험 이름")
     parser.add_argument('--tags', default= None, nargs='+', type=str, help = "wandb 실험 태그")
+    parser.add_argument('--notes', default= None, type=str, help='wandb 실험 노트(설명)')
 
     args = parser.parse_args()
 
@@ -55,7 +56,7 @@ def parse_args():
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval, name, tags, seed):
+                learning_rate, max_epoch, save_interval, name, tags, seed, notes):
     
     train_dataset = SceneTextDataset(data_dir, split='random_split_ufo/train', image_size=image_size, crop_size=input_size)
     train_dataset = EASTDataset(train_dataset)
@@ -162,7 +163,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 def main(args):
     assert args.name != None, "Error: 실험 이름을 적어주세요"
     assert args.tags != None, "Error: 실험 태그를 적어주세요"
-    wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags)
+    wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes)
     wandb.config.update(args)
     fix_seed(args.seed)
     do_training(**args.__dict__)
