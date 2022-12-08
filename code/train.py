@@ -74,7 +74,8 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     
     model.train()
     for epoch in range(max_epoch):
-        epoch_loss, epoch_start = 0, time.time()
+        train_epoch_loss = {'Train/Cls loss':0, 'Train/Angle loss':0, 'Train/IoU loss':0}
+        epoch_start = time.time()
         with tqdm(total=num_batches) as pbar:
             for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
                 pbar.set_description('[Epoch {}]'.format(epoch + 1))
@@ -84,14 +85,18 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 loss.backward()
                 optimizer.step()
 
-                loss_train = loss.item()
-                epoch_loss += loss_train
+                #-- epoch loss 계산
+                train_epoch_loss['Train/Cls loss'] += extra_info['cls_loss']
+                train_epoch_loss['Train/Angle loss'] += extra_info['angle_loss']
+                train_epoch_loss['Train/IoU loss'] += extra_info['iou_loss']
+                
 
                 pbar.update(1)
                 train_dict = {
                     'Train/Cls loss': extra_info['cls_loss'],
                     'Train/Angle loss': extra_info['angle_loss'],
-                    'Train/IoU loss': extra_info['iou_loss']
+                    'Train/IoU loss': extra_info['iou_loss'], 
+                    'Train/Mean loss': loss
                 }
                 pbar.set_postfix(train_dict)
                 
@@ -100,12 +105,18 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                      
         scheduler.step()
 
+        #-- epoch loss 계산
+        train_epoch_loss['Train/Mean loss'] = train_epoch_loss['Train/Cls loss'] + train_epoch_loss['Train/Angle loss'] + train_epoch_loss['Train/IoU loss']
+        for k in train_epoch_loss.keys():
+            train_epoch_loss[k] /= num_batches
+        train_epoch_loss['epoch'] = epoch
+        
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
-            epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
+            train_epoch_loss['Train/Mean loss'], timedelta(seconds=time.time() - epoch_start)))
         
         # wandb: loss for epoch
-        wandb.log({"Train/Mean loss": epoch_loss / num_batches})
-        wandb.log({"Train/Epoch":epoch})
+        wandb.log(train_epoch_loss, commit=False)
+        wandb.log({"Train/Epoch":epoch}, commit=False)
         
         # 모델 평가
         print('\nModel Eval/Epoch {}:'.format(epoch + 1))
@@ -141,7 +152,8 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         val_dict = {
                 'Val/Cls loss': val_loss['cls_loss']/val_num_batches,
                 'Val/Angle loss':val_loss['angle_loss']/val_num_batches,
-                'Val/IoU loss': val_loss['iou_loss']/val_num_batches
+                'Val/IoU loss': val_loss['iou_loss']/val_num_batches, 
+                'epoch': epoch
             }
         val_dict['Val/Mean loss'] =  val_dict['Val/Cls loss'] + val_dict['Val/Angle loss'] + val_dict['Val/IoU loss']
         
@@ -149,7 +161,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             val_dict['Val/Mean loss'], val_dict['Val/Cls loss'], val_dict['Val/Angle loss'], val_dict['Val/IoU loss']))
          
         # wandb: loss for val every epoch
-        wandb.log(val_dict)
+        wandb.log(val_dict, commit=False)
         
 
         if (epoch + 1) % save_interval == 0:
