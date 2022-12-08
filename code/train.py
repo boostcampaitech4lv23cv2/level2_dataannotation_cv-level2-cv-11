@@ -108,31 +108,34 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         
         # 모델 평가
         print('\nModel Eval/Epoch {}:'.format(epoch + 1))
-        model.eval()
+        
         val_loss = {'cls_loss' : 0, 'angle_loss': 0, 'iou_loss': 0}
         val_dataset = SceneTextDataset(data_dir, split='random_split_ufo/val', image_size=image_size, crop_size=input_size)
         val_dataset = EASTDataset(val_dataset)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
         val_num_batches = math.ceil(len(val_dataset) / batch_size)
-        for img, gt_score_map, gt_geo_map, roi_mask in val_loader:
-            pbar.set_description('[Epoch {}]'.format(epoch + 1))
+        
+        model.eval()
+        with torch.no_grad():
+            for img, gt_score_map, gt_geo_map, roi_mask in val_loader:
+                pbar.set_description('[Epoch {}]'.format(epoch + 1))
 
-            loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
-            
-            for key in val_loss.keys():
-                val_loss[key] += extra_info[key]
-            
-            
-            # wandb: image gt and pred for val every epoch
-            img_log = wandb.Image(img)
-            gt_score_map_log = wandb.Image(gt_score_map)
-            pred_score_map_log = wandb.Image(extra_info['score_map'])
-            
-            wandb.log({
-                "Visual/img":img_log,
-                "Visual/gt_score_map": gt_score_map_log,
-                "Visual/pred_score_map_log": pred_score_map_log
-                })
+                loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
+                
+                for key in val_loss.keys():
+                    val_loss[key] += extra_info[key]
+                
+                
+                # wandb: image gt and pred for val every epoch
+                img_log = wandb.Image(img)
+                gt_score_map_log = wandb.Image(gt_score_map)
+                pred_score_map_log = wandb.Image(extra_info['score_map'])
+                
+                wandb.log({
+                    "Visual/img":img_log,
+                    "Visual/gt_score_map": gt_score_map_log,
+                    "Visual/pred_score_map_log": pred_score_map_log
+                    })
     
         val_dict = {
                 'Val/Cls loss': val_loss['cls_loss']/val_num_batches,
