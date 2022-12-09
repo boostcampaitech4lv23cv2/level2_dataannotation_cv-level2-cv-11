@@ -19,16 +19,20 @@ from reproducibility import fix_seed, seed_worker
 
 import wandb
 
+from deteval import detect, calc_deteval_metrics
+import json
+
 # wandb 관련 함수
 
-def log_visual(img, gt_score_map, pred_score_map, gt_geo_map, pred_geo_map,):
+def log_visual(epoch,img, gt_score_map, pred_score_map, gt_geo_map, pred_geo_map):
     img_log =wandb.Image(img)
     gt_score_map_log = wandb.Image(gt_score_map)
     pred_score_map_log = wandb.Image(pred_score_map)
     wandb.log({
         "Visual/img":img_log,
         "Visual/gt_score_map": gt_score_map_log,
-        "Visual/pred_score_map_log": pred_score_map_log
+        "Visual/pred_score_map_log": pred_score_map_log,
+        "epoch": epoch
         }, commit=False)
 
 
@@ -72,7 +76,8 @@ def parse_args():
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
                 learning_rate, max_epoch, save_interval, name, tags, seed, notes, viz_log):
     
-    train_dataset = SceneTextDataset(data_dir, split='random_split_ufo/train', image_size=image_size, crop_size=input_size)
+    train_split = 'random_split_ufo/train'
+    train_dataset = SceneTextDataset(data_dir, split=train_split, image_size=image_size, crop_size=input_size)
     train_dataset = EASTDataset(train_dataset)
     num_batches = math.ceil(len(train_dataset) / batch_size)
     # generator 재현성
@@ -110,7 +115,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                     'Train/Cls loss': extra_info['cls_loss'],
                     'Train/Angle loss': extra_info['angle_loss'],
                     'Train/IoU loss': extra_info['iou_loss'], 
-                    'Train/Mean loss': loss
+                    'Train/Mean loss': loss.item()
                 }
                 pbar.set_postfix(train_dict)
                 
@@ -136,8 +141,9 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         print('\nModel Eval/Epoch {}:'.format(epoch + 1))
         
         val_loss = {'cls_loss' : 0, 'angle_loss': 0, 'iou_loss': 0}
-        val_dataset = SceneTextDataset(data_dir, split='random_split_ufo/val', image_size=image_size, crop_size=input_size)
-        val_dataset = EASTDataset(val_dataset)
+        val_split = 'random_split_ufo/val'
+        val_dataset_scene = SceneTextDataset(data_dir, split=val_split, image_size=image_size, crop_size=input_size)
+        val_dataset = EASTDataset(val_dataset_scene)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
         val_num_batches = math.ceil(len(val_dataset) / batch_size)
         
@@ -152,32 +158,30 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 
                 for key in val_loss.keys():
                     val_loss[key] += extra_info[key]                     
-                        
+                
+                if epoch +1 == args.max_epoch or epoch + 1 in args.viz_log:
+                    if idx == 0:
+                        visualization_list['img'] = img
+                    else:
+                        visualization_list['img'] = torch.cat((visualization_list['img'], img),0)
+                
                 if idx == 0:
-                    visualization_list['img'] = img
                     visualization_list['gt_score_map'] = gt_score_map
                     visualization_list['pred_score_map'] = extra_info['score_map']
                     visualization_list['gt_geo_map'] = gt_geo_map
                     visualization_list['pred_geo_map'] = extra_info['geo_map']
                 else:
-                    visualization_list['img'] = torch.cat((visualization_list['img'], img),0)
                     visualization_list['gt_score_map'] = torch.cat((visualization_list['gt_score_map'], gt_score_map),0)
                     visualization_list['pred_score_map'] = torch.cat((visualization_list['pred_score_map'], extra_info['score_map']),0)
-                    visualization_list['gt_geo_map'] = torch.cat((visualization_list['gt_geo_map'], gt_score_map),0)
+                    visualization_list['gt_geo_map'] = torch.cat((visualization_list['gt_geo_map'], gt_geo_map),0)
                     visualization_list['pred_geo_map'] = torch.cat((visualization_list['pred_geo_map'], extra_info['geo_map']),0)
 
         
         # wandb log visualization
         if epoch +1 == args.max_epoch or epoch + 1 in args.viz_log:
-            log_visual(**visualization_list)
+            log_visual(epoch, **visualization_list)
             
-
-        # deteval
-        detect(visualization_list['pred_score_map'], visualization_list['pred_geo_map'],
-               input_size, visualization_list['img'].shape[:2])
-        
-
-        
+        # val loss
         val_dict = {
                 'Val/Cls loss': val_loss['cls_loss']/val_num_batches,
                 'Val/Angle loss':val_loss['angle_loss']/val_num_batches,
@@ -186,11 +190,55 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             }
         val_dict['Val/Mean loss'] =  val_dict['Val/Cls loss'] + val_dict['Val/Angle loss'] + val_dict['Val/IoU loss']
         
-        print('Val/Mean loss: {:.4f}, Val/Cls loss: {:.4f}, Val/Angle loss: {:.4f}, Val/IoU loss: {:.4f}\n'.format(
+        print('Val/Mean loss: {:.4f}, Val/Cls loss: {:.4f}, Val/Angle loss: {:.4f}, Val/IoU loss: {:.4f}'.format(
             val_dict['Val/Mean loss'], val_dict['Val/Cls loss'], val_dict['Val/Angle loss'], val_dict['Val/IoU loss']))
          
         # wandb: loss for val every epoch
         wandb.log(val_dict, commit=False)
+        
+
+
+        # deteval
+        score_maps, geo_maps = visualization_list['pred_score_map'].cpu().numpy(), visualization_list['pred_geo_map'].cpu().numpy()
+        image_fnames = val_dataset_scene.image_fnames
+        
+        orig_size = []
+        for image in val_dataset_scene.anno['images'].values():
+            orig_size.append([image['img_h'],image['img_w']])
+                
+        
+        by_sample_bboxes = detect(score_maps, geo_maps,input_size, orig_size)
+        
+        pred_bboxes_dict = {}
+        for image_fname, bboxes in zip(image_fnames, by_sample_bboxes):
+            pred_bboxes_dict[image_fname] = bboxes
+        
+        gt_score_maps, gt_geo_maps = visualization_list['gt_score_map'].cpu().numpy(), visualization_list['gt_geo_map'].cpu().numpy()
+        gt_sample_bboxes = detect(gt_score_maps, gt_geo_maps,input_size, orig_size)
+        
+        gt_bboxes_dict = {}
+        for image_fname, bboxes in zip(image_fnames, gt_sample_bboxes):
+            gt_bboxes_dict[image_fname] = bboxes
+        
+        transcription = {}
+        for image, tmp_dict in val_dataset_scene.anno['images'].items():
+            idx = [ x for x in tmp_dict['words']]
+            transcription[image] = [tmp_dict['words'][x]["transcription"] for x in idx]
+        
+        
+        resDict = calc_deteval_metrics(pred_bboxes_dict,  gt_bboxes_dict, transcriptions_dict=transcription,
+                         eval_hparams=None, bbox_format='rect', verbose=False)
+        
+        resDict = resDict['total']
+        print('Val/Precision: {:.6f}, Val/Recall: {:.6f}, Val/F1: {:.6f}\n'.format(
+            resDict['precision'], resDict['recall'], resDict['hmean']))
+        
+        wandb.log({
+            'Val/Precision': resDict['precision'],
+            'Val/Recall':resDict['recall'],
+            'Val/F1':resDict['hmean']}, commit=False)
+        
+        
         
 
         if (epoch + 1) % save_interval == 0:
