@@ -348,11 +348,12 @@ class SceneTextDataset(Dataset):
         datasets = []  # 데이터셋 목록 읽어와서 저장. ex. ICAR17_Korean
         jsons_pth = []  # json 목록 저장
         jsons_dir = []  # json 경로(위치 폴더 절대경로) 저장 (for create new json folder)
-        anno = {}  # dataset-json 저장
         ## 데이터셋 목록 읽어와서 저장. ex. ICAR17_Korean
         with open(osp.join(root_dir, 'data_dirs.txt'), 'r') as f: 
             lines = f.readlines()
             for line in lines: 
+                if line[0] == '#':
+                    continue
                 datasets.append(line.strip().split('/')[-1])
                 
         ## json 목록 읽어와서 저장. ex. /opt/ml/input/data/ICDAR17_Korean/random_split_ufo/train.json
@@ -364,7 +365,7 @@ class SceneTextDataset(Dataset):
         assert len(datasets) == len(jsons_pth), "dataset, json 은 1대1 대응이어야 함"
         
         ## new json 파일 저장
-        folder_name = osp.join(root_dir,'{}_json'.format('_'.join(datasets)))
+        folder_name = osp.join(root_dir,'{}{}_json'.format('syn_','_'.join(datasets)))
         createFolder(folder_name)
         file_name = ""
         if is_train:
@@ -392,7 +393,7 @@ class SceneTextDataset(Dataset):
                 img_dir = osp.join(root_dir, images_key, img_fname)  # /opt/ml/input/data/DATASET/images/IMG_NAME
                 self.image_pths.append(img_dir)
         self.image_pths.sort()
-        print("image_path", self.image_pths)
+        #print("image_path", self.image_pths)
         assert len(self.image_pths) == temp_img_cnt, "이미지 목록 생성 에러"
 
         self.image_size, self.crop_size = image_size, crop_size
