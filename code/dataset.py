@@ -332,29 +332,83 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
 
     return new_vertices, new_labels
 
+import os
+def createFolder(directory):
+    try:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    except OSError:
+        print ('Error: Creating directory. ' +  directory)
 
 class SceneTextDataset(Dataset):
-    def __init__(self, root_dir, split='train', image_size=1024, crop_size=512, color_jitter=True,
-                 normalize=True):
-        with open(osp.join(root_dir, '{}.json'.format(split)), 'r') as f:
-            anno = json.load(f)
-
-        self.anno = anno
-        self.image_fnames = sorted(anno['images'].keys())
-        self.image_dir = osp.join(root_dir, 'images')
+    def __init__(self, root_dir, split='train_dirs.txt', image_size=1024, crop_size=512, color_jitter=True,
+                 normalize=True, is_train=True):
+        # root_dir = input/data/
+        ########
+        datasets = []  # 데이터셋 목록 읽어와서 저장. ex. ICAR17_Korean
+        jsons_pth = []  # json 목록 저장
+        jsons_dir = []  # json 경로(위치 폴더 절대경로) 저장 (for create new json folder)
+        anno = {}  # dataset-json 저장
+        ## 데이터셋 목록 읽어와서 저장. ex. ICAR17_Korean
+        with open(osp.join(root_dir, 'data_dirs.txt'), 'r') as f: 
+            lines = f.readlines()
+            for line in lines: 
+                datasets.append(line.strip().split('/')[-1])
+                
+        ## json 목록 읽어와서 저장. ex. /opt/ml/input/data/ICDAR17_Korean/random_split_ufo/train.json
+        with open(osp.join(root_dir, split), 'r') as f: 
+            lines = f.readlines()
+            for line in lines: 
+                jsons_pth.append(line.strip())
+                jsons_dir.append(line.split('/')[-2])
+        assert len(datasets) == len(jsons_pth), "dataset, json 은 1대1 대응이어야 함"
+        
+        ## new json 파일 저장
+        folder_name = osp.join(root_dir,'{}_json'.format('_'.join(datasets)))
+        createFolder(folder_name)
+        file_name = ""
+        if is_train:
+            file_name = '{}_train.json'.format('_'.join(jsons_dir))
+        else: 
+            file_name = '{}_valid.json'.format('_'.join(jsons_dir))
+        # json의 'images' 키를 'DATASET/images'로 rename하고, 하나의 json에 더해주기
+        new_json_data = {}
+        temp_img_cnt = 0
+        for i, json_file in enumerate(jsons_pth): 
+            with open(json_file, 'r') as f: 
+                temp = json.load(f)
+                temp_img_cnt += len(temp['images'].keys())
+                new_key = datasets[i] + '/images'
+                temp[new_key] = temp.pop('images')
+                new_json_data.update(temp)
+        assert len(jsons_pth) == len(new_json_data.keys()), "json 생성 에러"  # source json 개수와 new json의 key 개수가 같아야 함
+        with open(osp.join(folder_name, file_name), 'w') as f:            
+            json.dump(new_json_data, f, indent=2)
+        self.anno = new_json_data
+        ## 모든 이미지 경로 저장
+        self.image_pths = []
+        for images_key, images_value in self.anno.items(): 
+            for img_fname in images_value.keys(): 
+                img_dir = osp.join(root_dir, images_key, img_fname)  # /opt/ml/input/data/DATASET/images/IMG_NAME
+                self.image_pths.append(img_dir)
+        self.image_pths.sort()
+        print("image_path", self.image_pths)
+        assert len(self.image_pths) == temp_img_cnt, "이미지 목록 생성 에러"
 
         self.image_size, self.crop_size = image_size, crop_size
         self.color_jitter, self.normalize = color_jitter, normalize
 
     def __len__(self):
-        return len(self.image_fnames)
+        return len(self.image_pths)
 
     def __getitem__(self, idx):
-        image_fname = self.image_fnames[idx]
-        image_fpath = osp.join(self.image_dir, image_fname)
+        image_fname = self.image_pths[idx].split('/')[-1]
+        image_fpath = self.image_pths[idx]
+        image_dataset = image_fpath.split('/')[-3]
 
         vertices, labels = [], []
-        for word_info in self.anno['images'][image_fname]['words'].values():
+        image_key = image_dataset + '/images'
+        for word_info in self.anno[image_key][image_fname]['words'].values():
             vertices.append(np.array(word_info['points']).flatten())
             labels.append(int(not word_info['illegibility']))
         vertices, labels = np.array(vertices, dtype=np.float32), np.array(labels, dtype=np.int64)

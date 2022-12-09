@@ -36,8 +36,10 @@ def parse_args():
     parser = ArgumentParser()
 
     # Conventional args
-    parser.add_argument('--data_dir', type=str,
-                        default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/ICDAR17_Korean'))
+    parser.add_argument('--data_root_dir', type=str,
+                        default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/'))  ## datas/json 목록 txt 파일 경로 전달
+    #parser.add_argument('--data_dir', type=str,
+    #                    default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/ICDAR17_Korean'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR',
                                                                         'trained_models'))
 
@@ -68,10 +70,11 @@ def parse_args():
     return args
 
 
-def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
+def do_training(data_root_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
                 learning_rate, max_epoch, save_interval, name, tags, seed, notes, viz_log):
     
-    train_dataset = SceneTextDataset(data_dir, split='random_split_ufo/train', image_size=image_size, crop_size=input_size)
+    #train_dataset = SceneTextDataset(data_dir, split='random_split_ufo/train', image_size=image_size, crop_size=input_size)
+    train_dataset = SceneTextDataset(data_root_dir, split='train_dirs.txt', image_size=image_size, crop_size=input_size)
     train_dataset = EASTDataset(train_dataset)
     num_batches = math.ceil(len(train_dataset) / batch_size)
     # generator 재현성
@@ -135,7 +138,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         print('\nModel Eval/Epoch {}:'.format(epoch + 1))
         
         val_loss = {'cls_loss' : 0, 'angle_loss': 0, 'iou_loss': 0}
-        val_dataset = SceneTextDataset(data_dir, split='random_split_ufo/val', image_size=image_size, crop_size=input_size)
+        val_dataset = SceneTextDataset(data_root_dir, split='val_dirs.txt', image_size=image_size, crop_size=input_size, is_train=False)
         val_dataset = EASTDataset(val_dataset)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
         val_num_batches = math.ceil(len(val_dataset) / batch_size)
@@ -196,7 +199,16 @@ def main(args):
     assert args.tags != None, "Error: 실험 태그를 적어주세요"
     wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes)
     wandb.config.update(args)
-    wandb.config.update({'data':osp.basename(args.data_dir)})
+    
+    ## wandb config의 'data'에 data_dirs.txt에 리스트된 복수개의 데이터셋으로 업데이트
+    data_dirs = []  # 데이터셋 목록 저장
+    with open(osp.join(args.data_root_dir, 'data_dirs.txt'), 'r') as f: 
+        lines = f.readlines()
+        for line in lines: 
+            data_dirs.append(line.strip())
+    wandb.config.update({'data':', '.join(data_dirs)})
+    
+    
     fix_seed(args.seed)
     do_training(**args.__dict__)
 
