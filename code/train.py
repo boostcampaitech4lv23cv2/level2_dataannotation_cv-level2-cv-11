@@ -21,7 +21,7 @@ import wandb
 
 # wandb 관련 함수
 
-def log_visual(img, gt_score_map, pred_score_map):
+def log_visual(img, gt_score_map, pred_score_map, gt_geo_map, pred_geo_map,):
     img_log =wandb.Image(img)
     gt_score_map_log = wandb.Image(gt_score_map)
     pred_score_map_log = wandb.Image(pred_score_map)
@@ -30,6 +30,7 @@ def log_visual(img, gt_score_map, pred_score_map):
         "Visual/gt_score_map": gt_score_map_log,
         "Visual/pred_score_map_log": pred_score_map_log
         }, commit=False)
+
 
 
 def parse_args():
@@ -150,23 +151,32 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
                 
                 for key in val_loss.keys():
-                    val_loss[key] += extra_info[key]
-                
-                # wandb log visualization
-                if epoch +1 == args.max_epoch or epoch + 1 in args.viz_log:
-                    if idx == 0:
-                        visualization_list['img'] = img
-                        visualization_list['gt_score_map'] = gt_score_map
-                        visualization_list['pred_score_map'] = extra_info['score_map']
-                    else:
-                        visualization_list['img'] = torch.cat((visualization_list['img'], img),0)
-                        visualization_list['gt_score_map'] = torch.cat((visualization_list['gt_score_map'], gt_score_map),0)
-                        visualization_list['pred_score_map'] = torch.cat((visualization_list['pred_score_map'], extra_info['score_map']),0)
+                    val_loss[key] += extra_info[key]                     
+                        
+                if idx == 0:
+                    visualization_list['img'] = img
+                    visualization_list['gt_score_map'] = gt_score_map
+                    visualization_list['pred_score_map'] = extra_info['score_map']
+                    visualization_list['gt_geo_map'] = gt_geo_map
+                    visualization_list['pred_geo_map'] = extra_info['geo_map']
+                else:
+                    visualization_list['img'] = torch.cat((visualization_list['img'], img),0)
+                    visualization_list['gt_score_map'] = torch.cat((visualization_list['gt_score_map'], gt_score_map),0)
+                    visualization_list['pred_score_map'] = torch.cat((visualization_list['pred_score_map'], extra_info['score_map']),0)
+                    visualization_list['gt_geo_map'] = torch.cat((visualization_list['gt_geo_map'], gt_score_map),0)
+                    visualization_list['pred_geo_map'] = torch.cat((visualization_list['pred_geo_map'], extra_info['geo_map']),0)
 
         
         # wandb log visualization
         if epoch +1 == args.max_epoch or epoch + 1 in args.viz_log:
             log_visual(**visualization_list)
+            
+
+        # deteval
+        detect(visualization_list['pred_score_map'], visualization_list['pred_geo_map'],
+               input_size, visualization_list['img'].shape[:2])
+        
+
         
         val_dict = {
                 'Val/Cls loss': val_loss['cls_loss']/val_num_batches,
