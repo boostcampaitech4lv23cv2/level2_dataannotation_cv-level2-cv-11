@@ -19,6 +19,18 @@ from reproducibility import fix_seed, seed_worker
 
 import wandb
 
+# wandb 관련 함수
+
+def log_visual(img, gt_score_map, pred_score_map):
+    img_log =wandb.Image(img)
+    gt_score_map_log = wandb.Image(gt_score_map)
+    pred_score_map_log = wandb.Image(pred_score_map)
+    wandb.log({
+        "Visual/img":img_log,
+        "Visual/gt_score_map": gt_score_map_log,
+        "Visual/pred_score_map_log": pred_score_map_log
+        }, commit=False)
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -45,6 +57,8 @@ def parse_args():
     # wandb args
     parser.add_argument('--name', type=str, help="wandb 실험 이름")
     parser.add_argument('--tags', default= None, nargs='+', type=str, help = "wandb 실험 태그")
+    parser.add_argument('--notes', default= None, type=str, help='wandb 실험 노트(설명)')
+    parser.add_argument('--viz_log', default= [50,100,150,200], nargs='+', type=int, help='wandb viz log epoch list')
 
     args = parser.parse_args()
 
@@ -55,7 +69,7 @@ def parse_args():
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval, name, tags, seed):
+                learning_rate, max_epoch, save_interval, name, tags, seed, notes, viz_log):
     
     train_dataset = SceneTextDataset(data_dir, split='random_split_ufo/train', image_size=image_size, crop_size=input_size)
     train_dataset = EASTDataset(train_dataset)
@@ -73,7 +87,8 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     
     model.train()
     for epoch in range(max_epoch):
-        epoch_loss, epoch_start = 0, time.time()
+        train_epoch_loss = {'Train/Cls loss':0, 'Train/Angle loss':0, 'Train/IoU loss':0}
+        epoch_start = time.time()
         with tqdm(total=num_batches) as pbar:
             for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
                 pbar.set_description('[Epoch {}]'.format(epoch + 1))
@@ -83,14 +98,18 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 loss.backward()
                 optimizer.step()
 
-                loss_train = loss.item()
-                epoch_loss += loss_train
+                #-- epoch loss 계산
+                train_epoch_loss['Train/Cls loss'] += extra_info['cls_loss']
+                train_epoch_loss['Train/Angle loss'] += extra_info['angle_loss']
+                train_epoch_loss['Train/IoU loss'] += extra_info['iou_loss']
+                
 
                 pbar.update(1)
                 train_dict = {
                     'Train/Cls loss': extra_info['cls_loss'],
                     'Train/Angle loss': extra_info['angle_loss'],
-                    'Train/IoU loss': extra_info['iou_loss']
+                    'Train/IoU loss': extra_info['iou_loss'], 
+                    'Train/Mean loss': loss
                 }
                 pbar.set_postfix(train_dict)
                 
@@ -99,12 +118,18 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                      
         scheduler.step()
 
+        #-- epoch loss 계산
+        train_epoch_loss['Train/Mean loss'] = train_epoch_loss['Train/Cls loss'] + train_epoch_loss['Train/Angle loss'] + train_epoch_loss['Train/IoU loss']
+        for k in train_epoch_loss.keys():
+            train_epoch_loss[k] /= num_batches
+        train_epoch_loss['epoch'] = epoch
+        
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
-            epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
+            train_epoch_loss['Train/Mean loss'], timedelta(seconds=time.time() - epoch_start)))
         
         # wandb: loss for epoch
-        wandb.log({"Train/Mean loss": epoch_loss / num_batches})
-        wandb.log({"Train/Epoch":epoch})
+        wandb.log(train_epoch_loss, commit=False)
+        wandb.log({"Train/Epoch":epoch}, commit=False)
         
         # 모델 평가
         print('\nModel Eval/Epoch {}:'.format(epoch + 1))
@@ -115,9 +140,11 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
         val_num_batches = math.ceil(len(val_dataset) / batch_size)
         
+        visualization_list = {}
+        
         model.eval()
         with torch.no_grad():
-            for img, gt_score_map, gt_geo_map, roi_mask in val_loader:
+            for idx, (img, gt_score_map, gt_geo_map, roi_mask) in enumerate(val_loader):
                 pbar.set_description('[Epoch {}]'.format(epoch + 1))
 
                 loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
@@ -125,22 +152,27 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 for key in val_loss.keys():
                     val_loss[key] += extra_info[key]
                 
-                
-                # wandb: image gt and pred for val every epoch
-                img_log = wandb.Image(img)
-                gt_score_map_log = wandb.Image(gt_score_map)
-                pred_score_map_log = wandb.Image(extra_info['score_map'])
-                
-                wandb.log({
-                    "Visual/img":img_log,
-                    "Visual/gt_score_map": gt_score_map_log,
-                    "Visual/pred_score_map_log": pred_score_map_log
-                    })
-    
+                # wandb log visualization
+                if epoch +1 == args.max_epoch or epoch + 1 in args.viz_log:
+                    if idx == 0:
+                        visualization_list['img'] = img
+                        visualization_list['gt_score_map'] = gt_score_map
+                        visualization_list['pred_score_map'] = extra_info['score_map']
+                    else:
+                        visualization_list['img'] = torch.cat((visualization_list['img'], img),0)
+                        visualization_list['gt_score_map'] = torch.cat((visualization_list['gt_score_map'], gt_score_map),0)
+                        visualization_list['pred_score_map'] = torch.cat((visualization_list['pred_score_map'], extra_info['score_map']),0)
+
+        
+        # wandb log visualization
+        if epoch +1 == args.max_epoch or epoch + 1 in args.viz_log:
+            log_visual(**visualization_list)
+        
         val_dict = {
                 'Val/Cls loss': val_loss['cls_loss']/val_num_batches,
                 'Val/Angle loss':val_loss['angle_loss']/val_num_batches,
-                'Val/IoU loss': val_loss['iou_loss']/val_num_batches
+                'Val/IoU loss': val_loss['iou_loss']/val_num_batches, 
+                'epoch': epoch
             }
         val_dict['Val/Mean loss'] =  val_dict['Val/Cls loss'] + val_dict['Val/Angle loss'] + val_dict['Val/IoU loss']
         
@@ -148,7 +180,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             val_dict['Val/Mean loss'], val_dict['Val/Cls loss'], val_dict['Val/Angle loss'], val_dict['Val/IoU loss']))
          
         # wandb: loss for val every epoch
-        wandb.log(val_dict)
+        wandb.log(val_dict, commit=False)
         
 
         if (epoch + 1) % save_interval == 0:
@@ -162,8 +194,9 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 def main(args):
     assert args.name != None, "Error: 실험 이름을 적어주세요"
     assert args.tags != None, "Error: 실험 태그를 적어주세요"
-    wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags)
+    wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes)
     wandb.config.update(args)
+    wandb.config.update({'data':osp.basename(args.data_dir)})
     fix_seed(args.seed)
     do_training(**args.__dict__)
 
