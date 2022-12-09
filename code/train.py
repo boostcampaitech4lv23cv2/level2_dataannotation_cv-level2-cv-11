@@ -80,6 +80,12 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
     # generator 재현성
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, generator= seed_worker(seed))
     
+    #val_dataset
+    val_dataset = SceneTextDataset(data_root_dir, split='val_dirs.txt', image_size=image_size, crop_size=input_size, is_train=False)
+    val_dataset = EASTDataset(val_dataset)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
+    val_num_batches = math.ceil(len(val_dataset) / batch_size)
+    
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
@@ -137,12 +143,7 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
         # 모델 평가
         print('\nModel Eval/Epoch {}:'.format(epoch + 1))
         
-        val_loss = {'cls_loss' : 0, 'angle_loss': 0, 'iou_loss': 0}
-        val_dataset = SceneTextDataset(data_root_dir, split='val_dirs.txt', image_size=image_size, crop_size=input_size, is_train=False)
-        val_dataset = EASTDataset(val_dataset)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
-        val_num_batches = math.ceil(len(val_dataset) / batch_size)
-        
+        val_loss = {'cls_loss' : 0, 'angle_loss': 0, 'iou_loss': 0}        
         visualization_list = {}
         
         model.eval()
