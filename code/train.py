@@ -83,10 +83,15 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     model.to(device)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch // 2], gamma=0.1)
+    #scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch // 2], gamma=0.1)
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[1], gamma=0.1)
     
     model.train()
     for epoch in range(max_epoch):
+        # wandb: log learning rate
+        learning_rate = scheduler.get_lr()[0]
+        wandb.log({'Train/learning_rate': learning_rate})
+        
         train_epoch_loss = {'Train/Cls loss':0, 'Train/Angle loss':0, 'Train/IoU loss':0}
         epoch_start = time.time()
         with tqdm(total=num_batches) as pbar:
@@ -115,7 +120,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 
                 # wandb: loss for step
                 wandb.log(train_dict)
-                     
+            
         scheduler.step()
 
         #-- epoch loss 계산
@@ -192,8 +197,8 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 
 
 def main(args):
-    assert args.name != None, "Error: 실험 이름을 적어주세요"
-    assert args.tags != None, "Error: 실험 태그를 적어주세요"
+    #assert args.name != None, "Error: 실험 이름을 적어주세요"
+    #assert args.tags != None, "Error: 실험 태그를 적어주세요"
     wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes)
     wandb.config.update(args)
     wandb.config.update({'data':osp.basename(args.data_dir)})

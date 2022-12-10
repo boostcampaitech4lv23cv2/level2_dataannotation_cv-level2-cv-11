@@ -189,5 +189,3 @@ if __name__ == '__main__':
     m = EAST()
     x = torch.randn(1, 3, 256, 256)
     score, geo = m(x)
-    print(score.shape)
-    print(geo.shape)
