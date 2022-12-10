@@ -86,8 +86,8 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, generator= seed_worker(seed))
     
     #val_dataset
-    val_dataset = SceneTextDataset(data_root_dir, split='val_dirs.txt', image_size=image_size, crop_size=input_size, is_train=False)
-    val_dataset = EASTDataset(val_dataset)
+    val_dataset_scene = SceneTextDataset(data_root_dir, split='val_dirs.txt', image_size=image_size, crop_size=input_size, is_train=False)
+    val_dataset = EASTDataset(val_dataset_scene)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
     val_num_batches = math.ceil(len(val_dataset) / batch_size)
     
@@ -202,11 +202,12 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
 
         # deteval
         score_maps, geo_maps = visualization_list['pred_score_map'].cpu().numpy(), visualization_list['pred_geo_map'].cpu().numpy()
-        image_fnames = val_dataset_scene.image_fnames
+        image_fnames = val_dataset_scene.image_pths
         
         orig_size = []
-        for image in val_dataset_scene.anno['images'].values():
-            orig_size.append([image['img_h'],image['img_w']])
+        for image_key in val_dataset_scene.anno.keys():
+            for image in val_dataset_scene.anno[image_key].values():
+                orig_size.append([image['img_h'],image['img_w']])
                 
         
         by_sample_bboxes = detect(score_maps, geo_maps,input_size, orig_size)
@@ -223,9 +224,10 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
             gt_bboxes_dict[image_fname] = bboxes
         
         transcription = {}
-        for image, tmp_dict in val_dataset_scene.anno['images'].items():
-            idx = [ x for x in tmp_dict['words']]
-            transcription[image] = [tmp_dict['words'][x]["transcription"] for x in idx]
+        for image_fname in image_fnames:
+            key_list = image_fname.split('/')
+            idx = [ x for x in val_dataset_scene.anno[os.path.join(key_list[-3],key_list[-2])][key_list[-1]]['words']]
+            transcription[image_fname] = [val_dataset_scene.anno[os.path.join(key_list[-3],key_list[-2])][key_list[-1]]['words'][x]["transcription"] for x in idx]
         
         
         resDict = calc_deteval_metrics(pred_bboxes_dict,  gt_bboxes_dict, transcriptions_dict=transcription,
@@ -252,8 +254,8 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
 
 
 def main(args):
-    assert args.name != None, "Error: 실험 이름을 적어주세요"
-    assert args.tags != None, "Error: 실험 태그를 적어주세요"
+    #assert args.name != None, "Error: 실험 이름을 적어주세요"
+    #assert args.tags != None, "Error: 실험 태그를 적어주세요"
     wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes)
     wandb.config.update(args)
     

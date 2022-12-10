@@ -393,7 +393,6 @@ class SceneTextDataset(Dataset):
                 img_dir = osp.join(root_dir, images_key, img_fname)  # /opt/ml/input/data/DATASET/images/IMG_NAME
                 self.image_pths.append(img_dir)
         self.image_pths.sort()
-        #print("image_path", self.image_pths)
         assert len(self.image_pths) == temp_img_cnt, "이미지 목록 생성 에러"
 
         self.image_size, self.crop_size = image_size, crop_size
