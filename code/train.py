@@ -189,16 +189,17 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         
 
         if (epoch + 1) % save_interval == 0:
-            if not osp.exists(model_dir):
-                os.makedirs(model_dir)
+            if not osp.exists(osp.join(model_dir,name)):
+                os.makedirs(osp.join(model_dir,name))
+                
 
-            ckpt_fpath = osp.join(model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(model_dir,name,'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
 
 def main(args):
-    #assert args.name != None, "Error: 실험 이름을 적어주세요"
-    #assert args.tags != None, "Error: 실험 태그를 적어주세요"
+    assert args.name != None, "Error: 실험 이름을 적어주세요"
+    assert args.tags != None, "Error: 실험 태그를 적어주세요"
     wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes)
     wandb.config.update(args)
     wandb.config.update({'data':osp.basename(args.data_dir)})
