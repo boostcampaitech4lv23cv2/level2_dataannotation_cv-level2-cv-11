@@ -97,10 +97,15 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
     model.to(device)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch // 2], gamma=0.1)
+    #scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch // 2], gamma=0.1)
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[1], gamma=0.1)
     
     model.train()
     for epoch in range(max_epoch):
+        # wandb: log learning rate
+        learning_rate = scheduler.get_lr()[0]
+        wandb.log({'Train/learning_rate': learning_rate})
+        
         train_epoch_loss = {'Train/Cls loss':0, 'Train/Angle loss':0, 'Train/IoU loss':0}
         epoch_start = time.time()
         with tqdm(total=num_batches) as pbar:
@@ -129,7 +134,7 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
                 
                 # wandb: loss for step
                 wandb.log(train_dict)
-                     
+            
         scheduler.step()
 
         #-- epoch loss 계산
@@ -246,10 +251,11 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
         
 
         if (epoch + 1) % save_interval == 0:
-            if not osp.exists(model_dir):
-                os.makedirs(model_dir)
+            if not osp.exists(osp.join(model_dir,name)):
+                os.makedirs(osp.join(model_dir,name))
+                
 
-            ckpt_fpath = osp.join(model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(model_dir,name,'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
 
