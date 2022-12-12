@@ -63,6 +63,7 @@ def parse_args():
 
     # wandb args
     parser.add_argument('--no-wandb', default=False, action='store_true', help='wandb 비활성화')
+    parser.add_argument('--project', default='dataannotation', type=str, help='wandb 프로젝트명')
     parser.add_argument('--name', type=str, help="wandb 실험 이름")
     parser.add_argument('--tags', default= None, nargs='+', type=str, help = "wandb 실험 태그")
     parser.add_argument('--notes', default= None, type=str, help='wandb 실험 노트(설명)')
@@ -261,7 +262,7 @@ def main(args):
     #assert args.name != None, "Error: 실험 이름을 적어주세요"
     #assert args.tags != None, "Error: 실험 태그를 적어주세요"
     mode = "disabled" if args.no_wandb else "online"
-    wandb.init(project="dataannotation", entity="miho", name=args.name, tags=args.tags, notes=args.notes, mode=mode)
+    wandb.init(project=args.project, entity="miho", name=args.name, tags=args.tags, notes=args.notes, mode=mode)
     wandb.config.update(args)
 
     ## wandb config의 'data'에 data_dirs.txt에 리스트된 복수개의 데이터셋으로 업데이트
