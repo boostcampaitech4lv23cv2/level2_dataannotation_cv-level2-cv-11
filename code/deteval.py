@@ -4,6 +4,29 @@ from copy import deepcopy
 
 import numpy as np
 
+from detect import get_bboxes
+
+def detect(score_maps, geo_maps, input_size, orig_sizes):
+    
+    by_sample_bboxes = []
+    for score_map, geo_map, orig_size in zip(score_maps, geo_maps, orig_sizes):
+        map_margin = int(abs(orig_size[0] - orig_size[1]) * 0.25 * input_size / max(orig_size))
+        if orig_size[0] > orig_size[1]:
+            score_map, geo_map = score_map[:, :, :-map_margin], geo_map[:, :, :-map_margin]
+        else:
+            score_map, geo_map = score_map[:, :-map_margin, :], geo_map[:, :-map_margin, :]
+
+        bboxes = get_bboxes(score_map, geo_map)
+        if bboxes is None:
+            bboxes = np.zeros((0, 4, 2), dtype=np.float32)
+        else:
+            bboxes = bboxes[:, :8].reshape(-1, 4, 2)
+            bboxes *= max(orig_size) / input_size
+
+        by_sample_bboxes.append(bboxes)
+
+    return by_sample_bboxes
+
 
 def default_evaluation_params():
     """
