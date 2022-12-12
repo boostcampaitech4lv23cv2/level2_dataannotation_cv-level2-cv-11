@@ -112,6 +112,9 @@ class UFODatasetImporter(
             h = image['img_h']
             polys = []
             for i, word in image['words'].items():
+                default_word = dict(transcription='', language=None, illegibility=False, orientation='Horizontal')
+                default_word.update(word)
+                word = default_word
                 # 좌표 0~1 범위로 정규화
                 points = []
                 for p in word['points']:

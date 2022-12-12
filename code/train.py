@@ -259,8 +259,9 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
 
 
 def main(args):
-    #assert args.name != None, "Error: 실험 이름을 적어주세요"
-    #assert args.tags != None, "Error: 실험 태그를 적어주세요"
+    assert args.name != None, "Error: 실험 이름을 적어주세요"
+    assert args.tags != None, "Error: 실험 태그를 적어주세요"
+
     mode = "disabled" if args.no_wandb else "online"
     wandb.init(project=args.project, entity="miho", name=args.name, tags=args.tags, notes=args.notes, mode=mode)
     wandb.config.update(args)
