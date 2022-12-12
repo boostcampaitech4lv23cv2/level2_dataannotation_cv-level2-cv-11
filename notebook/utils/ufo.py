@@ -166,14 +166,12 @@ class UFODatasetImporter(
         return fol.Polylines
 
     def setup(self):
-        pass
-
         image_paths_map = self._load_data_map(self.data_path, recursive=True)
 
         if self.labels_path is not None and os.path.isfile(self.labels_path):
             d = etas.load_json(self.labels_path)['images']
         else:
-            d = []
+            d = {}
 
         # Use subset/name as the key if it exists, else just name
         ufo_images_map = {}
@@ -278,8 +276,8 @@ class UFODatasetExporter(
 
                 word = {
                     "points": points,
-                    "transcription": poly['transcription'],
-                    "language": eval(poly['language']),
+                    "transcription": poly['transcription'] if 'transcription' in poly else '',
+                    "language": eval(poly['language']) if 'language' in poly else [],
                     "illegibility": poly["illegibility"],
                     "orientation": poly["orientation"],
                     "tags": eval(poly["word_tags"]) if 'word_tags' in poly else None
@@ -319,7 +317,7 @@ class UFODataset(ImageLabelsDataset):
 
 base = ['ko', 'en', 'others']
 lang_values = [] # 가능한 모든 language 조합들
-for i in range(1, 4):
+for i in range(0, 4):
     for L in itertools.combinations(base, i):
         lang_values.append(str(list(L)))
 
@@ -332,20 +330,25 @@ label_schema = {
         "attributes": {
             "language": {
                 "type": "select",
-                "values": lang_values
+                "values": lang_values,
+                "default": "[]"
             },
             "orientation": {
                 "type": "select",
-                "values": ["Horizontal", "vertical", "irregular"],
+                "values": ["Horizontal", "Vertical", "Irregular"],
+                "default": "Horizontal"
             },
             "illegibility": {
                 "type": "checkbox",
+                "default": False
             },
             "transcription": {
-                "type": "text"
+                "type": "text",
+                "default": ""
             },
             "word_tags": {
-                "type": "text"
+                "type": "text",
+                "default": "[]"
             }
         },
         "existing_field": True,
