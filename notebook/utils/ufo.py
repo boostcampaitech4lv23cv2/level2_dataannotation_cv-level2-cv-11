@@ -112,6 +112,9 @@ class UFODatasetImporter(
             h = image['img_h']
             polys = []
             for i, word in image['words'].items():
+                default_word = dict(transcription='', language=None, illegibility=False, orientation='Horizontal')
+                default_word.update(word)
+                word = default_word
                 # 좌표 0~1 범위로 정규화
                 points = []
                 for p in word['points']:
@@ -166,14 +169,12 @@ class UFODatasetImporter(
         return fol.Polylines
 
     def setup(self):
-        pass
-
         image_paths_map = self._load_data_map(self.data_path, recursive=True)
 
         if self.labels_path is not None and os.path.isfile(self.labels_path):
             d = etas.load_json(self.labels_path)['images']
         else:
-            d = []
+            d = {}
 
         # Use subset/name as the key if it exists, else just name
         ufo_images_map = {}
@@ -278,8 +279,8 @@ class UFODatasetExporter(
 
                 word = {
                     "points": points,
-                    "transcription": poly['transcription'],
-                    "language": eval(poly['language']),
+                    "transcription": poly['transcription'] if 'transcription' in poly else '',
+                    "language": eval(poly['language']) if 'language' in poly else None,
                     "illegibility": poly["illegibility"],
                     "orientation": poly["orientation"],
                     "tags": eval(poly["word_tags"]) if 'word_tags' in poly else None
@@ -318,7 +319,7 @@ class UFODataset(ImageLabelsDataset):
 
 
 base = ['ko', 'en', 'others']
-lang_values = [] # 가능한 모든 language 조합들
+lang_values = ['None'] # 가능한 모든 language 조합들
 for i in range(1, 4):
     for L in itertools.combinations(base, i):
         lang_values.append(str(list(L)))
@@ -332,20 +333,25 @@ label_schema = {
         "attributes": {
             "language": {
                 "type": "select",
-                "values": lang_values
+                "values": lang_values,
+                "default": "None"
             },
             "orientation": {
                 "type": "select",
-                "values": ["Horizontal", "vertical", "irregular"],
+                "values": ["Horizontal", "Vertical", "Irregular"],
+                "default": "Horizontal"
             },
             "illegibility": {
                 "type": "checkbox",
+                "default": False
             },
             "transcription": {
-                "type": "text"
+                "type": "text",
+                "default": ""
             },
             "word_tags": {
-                "type": "text"
+                "type": "text",
+                "default": "[]"
             }
         },
         "existing_field": True,

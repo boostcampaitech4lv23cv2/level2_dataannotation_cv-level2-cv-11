@@ -57,10 +57,10 @@ def do_inference(model, ckpt_fpath, data_dir, json_dir ,input_size, batch_size):
 
     with open(json_dir) as f:  ufo_result = json.load(f)
     pred_sample_bboxes = {}
-    for image_fname, bboxes in zip(image_fnames, by_sample_bboxes):
-        words_info = {idx: dict(points=bbox.tolist(), transcription="", language = "",
-                                illegibility = False, orientation ="", word_tags = "") for idx, bbox in enumerate(bboxes)}
-        ufo_result['images'][image_fname]['words'] = dict(words_info)
+    for image, image_fname, bboxes in zip(images, image_fnames, by_sample_bboxes):
+        w, h, _ = image.shape
+        words_info = {idx: dict(points=bbox.tolist()) for idx, bbox in enumerate(bboxes)}
+        ufo_result['images'][image_fname] = dict(words=words_info, img_w=w, img_h=h, tags=None, license_tag=None)
         pred_sample_bboxes[image_fname] = bboxes
         
 
@@ -112,7 +112,7 @@ def main(args):
     with open(osp.join(args.output_dir, output_txtname), 'w') as f:
         f.write("#Result\n #Data: {}\n #model_pth: {}\n".format(args.data_dir, ckpt_fpath))
         f.write('DetEval/Precision: {:.6f}, DetEval/Recall: {:.6f}, DetEval/F1: {:.6f}\n'.format(
-            resDict['precision'], resDict['recall'], resDict['hmean']))
+            resDict['total']['precision'], resDict['total']['recall'], resDict['total']['hmean']))
     
 
 if __name__ == '__main__':
