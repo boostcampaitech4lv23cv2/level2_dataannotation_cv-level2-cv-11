@@ -277,7 +277,7 @@ class UFODatasetExporter(
                 word = {
                     "points": points,
                     "transcription": poly['transcription'] if 'transcription' in poly else '',
-                    "language": eval(poly['language']) if 'language' in poly else [],
+                    "language": eval(poly['language']) if 'language' in poly else None,
                     "illegibility": poly["illegibility"],
                     "orientation": poly["orientation"],
                     "tags": eval(poly["word_tags"]) if 'word_tags' in poly else None
@@ -316,8 +316,8 @@ class UFODataset(ImageLabelsDataset):
 
 
 base = ['ko', 'en', 'others']
-lang_values = [] # 가능한 모든 language 조합들
-for i in range(0, 4):
+lang_values = ['None'] # 가능한 모든 language 조합들
+for i in range(1, 4):
     for L in itertools.combinations(base, i):
         lang_values.append(str(list(L)))
 
@@ -331,7 +331,7 @@ label_schema = {
             "language": {
                 "type": "select",
                 "values": lang_values,
-                "default": "[]"
+                "default": "None"
             },
             "orientation": {
                 "type": "select",
