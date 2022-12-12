@@ -103,7 +103,7 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
     model.train()
     for epoch in range(max_epoch):
         # wandb: log learning rate
-        learning_rate = scheduler.get_lr()[0]
+        learning_rate = scheduler.get_last_lr()
         wandb.log({'Train/learning_rate': learning_rate})
         
         train_epoch_loss = {'Train/Cls loss':0, 'Train/Angle loss':0, 'Train/IoU loss':0}
