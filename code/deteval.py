@@ -214,7 +214,10 @@ def calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict, transcriptions_dict=N
 
         for n in range(len(pointsList)):
             points = pointsList[n]
-            transcription = transcriptionsList[n]
+            try:
+                transcription = transcriptionsList[n]
+            except:
+                transcription = ""
             dontCare = transcription == "###"
             gtRect = Rectangle(*points)
             gtRects.append(gtRect)
