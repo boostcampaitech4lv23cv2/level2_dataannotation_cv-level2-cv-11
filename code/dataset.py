@@ -375,15 +375,14 @@ class SceneTextDataset(Dataset):
         # json의 'images' 키를 'DATASET/images'로 rename하고, 하나의 json에 더해주기
         new_json_data = {}
         temp_img_cnt = 0
-        for i, json_file in enumerate(jsons_pth): 
-            with open(json_file, 'r') as f: 
+        for i, json_file in enumerate(jsons_pth):
+            with open(json_file, 'r') as f:
                 temp = json.load(f)
                 temp_img_cnt += len(temp['images'].keys())
                 new_key = datasets[i] + '/images'
-                temp[new_key] = temp.pop('images')
-                new_json_data.update(temp)
+                new_json_data.update({new_key: temp['images']})
         assert len(jsons_pth) == len(new_json_data.keys()), "json 생성 에러"  # source json 개수와 new json의 key 개수가 같아야 함
-        with open(osp.join(folder_name, file_name), 'w') as f:            
+        with open(osp.join(folder_name, file_name), 'w') as f:
             json.dump(new_json_data, f, indent=2)
         self.anno = new_json_data
         ## 모든 이미지 경로 저장
