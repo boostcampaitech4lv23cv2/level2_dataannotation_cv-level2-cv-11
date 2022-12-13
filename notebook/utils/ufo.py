@@ -296,8 +296,8 @@ class UFODatasetExporter(
             "img_h": metadata.height,
             "img_w": metadata.width,
             "words": words_dict,
-            "tags": label['tags'] if 'tags' in label else None,
-            "license_tag": label['license_tag'] if 'license_tag' in label else None
+            "tags": label['tags'] if label and 'tags' in label else None,
+            "license_tag": label['license_tag'] if label and 'license_tag' in label else None
         }
 
         self._images[file_name] = image
