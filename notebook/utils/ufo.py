@@ -129,11 +129,15 @@ class UFODatasetImporter(
                 elif 'tags' in word:
                     word_tags = word['tags']
 
+                t = word['transcription']
+                if type(t) == str:
+                    t.replace('-', '~')
+
                 poly = fol.Polyline(
                     label = 'word',
                     ufo_id = f'{filename}-{i}',
                     points = [points], filled = True,
-                    transcription = word['transcription'].replace('-', '~'),
+                    transcription = t,
                     language = str(word['language']),
                     illegibility = word['illegibility'],
                     orientation = word['orientation'],
