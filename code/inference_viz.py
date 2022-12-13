@@ -21,8 +21,8 @@ def parse_args():
 
     # Conventional args
     parser.add_argument('--data_dir', default='/opt/ml/input/data/ICDAR17_Korean')
-    parser.add_argument('--json_dir', default='/opt/ml/input/data/ICDAR17_Korean/ufo/train.json')
-    parser.add_argument('--model_dir', default= '/opt/ml/code/trained_models')
+    parser.add_argument('--json_path', default='/opt/ml/input/data/ICDAR17_Korean/ufo/train.json')
+    parser.add_argument('--model_path', default= '/opt/ml/code/trained_models')
     parser.add_argument('--output_dir', default= '/opt/ml/code/predictions')
 
     parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')
@@ -37,14 +37,16 @@ def parse_args():
     return args
 
 
-def do_inference(model, ckpt_fpath, data_dir, json_dir ,input_size, batch_size):
+def do_inference(model, ckpt_fpath, data_dir, json_path ,input_size, batch_size):
     model.load_state_dict(torch.load(ckpt_fpath, map_location='cpu'))
     model.eval()
 
     image_fnames, by_sample_bboxes = [], []
 
     images = []
-    for image_fpath in tqdm(glob(osp.join(data_dir, 'images/*'))):
+    with open(json_path) as f: data = json.load(f)
+    for key in tqdm(data['images'].keys()):
+        image_fpath  = osp.join(data_dir,'images', key)
         image_fnames.append(osp.basename(image_fpath))
 
         images.append(cv2.imread(image_fpath)[:, :, ::-1])
@@ -55,7 +57,7 @@ def do_inference(model, ckpt_fpath, data_dir, json_dir ,input_size, batch_size):
     if len(images):
         by_sample_bboxes.extend(detect(model, images, input_size))
 
-    with open(json_dir) as f:  ufo_result = json.load(f)
+    with open(json_path) as f:  ufo_result = json.load(f)
     pred_sample_bboxes = {}
     for image_fname, bboxes in zip(image_fnames, by_sample_bboxes):
         words_info = {idx: dict(points=bbox.tolist(), transcription="", language = "",
@@ -66,12 +68,12 @@ def do_inference(model, ckpt_fpath, data_dir, json_dir ,input_size, batch_size):
 
     return ufo_result, pred_sample_bboxes
 
-def get_gt_bboxes__transcription(json_dir):
+def get_gt_bboxes__transcription(json_path):
     
     gt_sample_bboxes = {}
     transcription = {}
     
-    with open(json_dir) as f: data = json.load(f)
+    with open(json_path) as f: data = json.load(f)
     for filename, tmp_dict in data['images'].items():
         idx = [ x for x in tmp_dict['words']]
         gt_sample_bboxes[filename] = [tmp_dict['words'][x]["points"] for x in idx]
@@ -86,7 +88,7 @@ def main(args):
     model = EAST(pretrained=False).to(args.device)
 
     # Get paths to checkpoint files
-    ckpt_fpath = osp.join(args.model_dir, 'latest.pth')
+    ckpt_fpath = args.model_path
 
     if not osp.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -94,7 +96,7 @@ def main(args):
     print('Inference in progress')
 
     ufo_result = dict(images=dict())
-    result, pred_bboxes_dict  = do_inference(model, ckpt_fpath, args.data_dir, args.json_dir, args.input_size,
+    result, pred_bboxes_dict  = do_inference(model, ckpt_fpath, args.data_dir, args.json_path, args.input_size,
                                     args.batch_size)
     ufo_result['images'].update(result['images'])
 
@@ -102,7 +104,7 @@ def main(args):
     with open(osp.join(args.output_dir, output_fname), 'w') as f:
         json.dump(ufo_result, f, indent=4)
      
-    gt_bboxes_dict, transcription = get_gt_bboxes__transcription(args.json_dir)
+    gt_bboxes_dict, transcription = get_gt_bboxes__transcription(args.json_path)
      
     resDict = calc_deteval_metrics(pred_bboxes_dict,  gt_bboxes_dict, transcriptions_dict=transcription,
                          eval_hparams=None, bbox_format='rect', verbose=False)
