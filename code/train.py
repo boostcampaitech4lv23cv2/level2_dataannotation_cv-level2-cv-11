@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR',
                                                                         'trained_models'))
 
-    parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')
+    parser.add_argument('--device', default='cuda:0' if cuda.is_available() else 'cpu')
     parser.add_argument('--num_workers', type=int, default=4)
 
     parser.add_argument('--image_size', type=int, default=1024)
@@ -93,8 +93,9 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, generator= seed_worker(seed))
     val_num_batches = math.ceil(len(val_dataset) / batch_size)
 
+    if device != 'cpu' and not torch.cuda.is_available():
+        device = 'cpu'
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
     model.to(device)
 
