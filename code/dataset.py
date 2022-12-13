@@ -300,9 +300,12 @@ def rotate_img(img, vertices, angle_range=10):
     center_x = (img.width - 1) / 2
     center_y = (img.height - 1) / 2
     tmp = np.random.randint(10)
-    if tmp < 1:
-        angle_range = 90
+    
     angle = angle_range * (np.random.rand() * 2 - 1)
+    if tmp == 0:
+        angle += 90
+    if tmp == 1:
+        angle -= 90
     img = img.rotate(angle, Image.BILINEAR)
     new_vertices = np.zeros(vertices.shape)
     for i, vertice in enumerate(vertices):
