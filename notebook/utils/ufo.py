@@ -133,7 +133,7 @@ class UFODatasetImporter(
                     label = 'word',
                     ufo_id = f'{filename}-{i}',
                     points = [points], filled = True,
-                    transcription = word['transcription'],
+                    transcription = word['transcription'].replace('-', '~'),
                     language = str(word['language']),
                     illegibility = word['illegibility'],
                     orientation = word['orientation'],
