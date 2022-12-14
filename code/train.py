@@ -47,6 +47,7 @@ def parse_args():
     #                    default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/ICDAR17_Korean'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR',
                                                                         'trained_models'))
+    parser.add_argument('--load_from', type=str, default=None, help='모델 가중치(.pth) 경로')
 
     parser.add_argument('--device', default='cuda:0' if cuda.is_available() else 'cpu')
     parser.add_argument('--num_workers', type=int, default=4)
@@ -97,6 +98,11 @@ def do_training(data_root_dir, model_dir, device, image_size, input_size, num_wo
         device = 'cpu'
 
     model = EAST()
+    if args.load_from:
+        model.load_state_dict(torch.load(args.load_from, map_location='cpu'))
+        print('[Info] Load From', args.load_from)
+    else:
+        print('[info] Train from scratch')
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
